@@ -3,6 +3,7 @@
 from .vim_table import VimTable, VimTableInputDialog
 from .vim_list import VimList, VimListInputDialog
 from .vim_multimedia_list import VimMultimediaList, MultimediaListItem, VimMultimediaListInputDialog
+from .vim_tree import VimTree, VimTreeInputDialog
 from .image_thumbnail import ImageThumbnail
 from .image_viewer import ImageViewer
 from .image_gallery import ImageGallery
@@ -17,6 +18,8 @@ __all__ = [
     "VimMultimediaList",
     "MultimediaListItem", 
     "VimMultimediaListInputDialog",
+    "VimTree",
+    "VimTreeInputDialog",
     "ImageThumbnail",
     "ImageViewer", 
     "ImageGallery",
