@@ -44,7 +44,7 @@ class VimListInputDialog(QDialog):
     
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key events."""
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.reject()
         else:
             super().keyPressEvent(event)
@@ -230,6 +230,8 @@ class VimList(QWidget):
         
         for item in self.items:
             list_item = QListWidgetItem(str(item))
+            # Ensure items are not editable by default (vim-style control)
+            list_item.setFlags(list_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.list_widget.addItem(list_item)
         
         # Restore selection
@@ -253,24 +255,31 @@ class VimList(QWidget):
     
     def _on_item_changed(self, item: QListWidgetItem):
         """Handle item change events."""
+        # Only process changes during edit mode to avoid infinite loops
         if not self.edit_mode:
             return
         
         row = self.list_widget.row(item)
         if 0 <= row < len(self.items):
-            old_value = self.items[row]
+            old_value = getattr(self, '_original_value', self.items[row])
             new_value = item.text()
             
-            if old_value != new_value:
-                self.items[row] = new_value
+            # Update internal data immediately
+            self.items[row] = new_value
+            
+            # Store the new value for exit_edit_mode to use
+            self._current_edit_value = new_value
+            
+            # Emit signal only if value actually changed
+            if old_value != new_value and hasattr(self, '_original_value'):
                 self.item_edited.emit(row, old_value, new_value)
     
     def eventFilter(self, obj, event):
         """Event filter to capture key events."""
-        if event.type() == QEvent.InputMethod or event.type() == QEvent.InputMethodQuery:
+        if event.type() == QEvent.Type.InputMethod or event.type() == QEvent.Type.InputMethodQuery:
             return True
             
-        if obj == self.list_widget and event.type() == QEvent.KeyPress:
+        if obj == self.list_widget and event.type() == QEvent.Type.KeyPress:
             if self._handle_key_event(event):
                 return True
         return super().eventFilter(obj, event)
@@ -281,13 +290,15 @@ class VimList(QWidget):
         modifiers = event.modifiers()
         
         # Handle editing state
-        if self.list_widget.state() == QAbstractItemView.EditingState:
-            if key == Qt.Key_Escape:
+        if self.edit_mode or self.list_widget.state() == QAbstractItemView.State.EditingState:
+            if key == Qt.Key.Key_Escape:
                 self._exit_edit_mode(save=False)
                 return True
-            elif key == Qt.Key_Return:
-                self._exit_edit_mode(save=True)
-                return True
+            elif key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
+                # Let Qt handle the return key first to commit the edit
+                QTimer.singleShot(0, lambda: self._exit_edit_mode(save=True))
+                return False  # Let Qt process the return key
+            # Let other keys pass through for normal editing
             return False
         
         # Handle search mode
@@ -310,7 +321,7 @@ class VimList(QWidget):
         modifiers = event.modifiers()
         
         # Handle escape
-        if key == Qt.Key_Escape:
+        if key == Qt.Key.Key_Escape:
             if self.visual_mode:
                 self._exit_visual_mode()
                 return True
@@ -327,7 +338,7 @@ class VimList(QWidget):
         
         # Handle pending operations
         if self.pending_delete:
-            if key == Qt.Key_D:
+            if key == Qt.Key.Key_D:
                 self._delete_current_item()
                 return True
             else:
@@ -335,7 +346,7 @@ class VimList(QWidget):
             return True
         
         if self.pending_copy:
-            if key == Qt.Key_Y:
+            if key == Qt.Key.Key_Y:
                 self._copy_current_item()
                 return True
             else:
@@ -343,14 +354,14 @@ class VimList(QWidget):
             return True
         
         # Navigation keys
-        if key == Qt.Key_J:
+        if key == Qt.Key.Key_J:
             self._move_down()
             return True
-        elif key == Qt.Key_K:
+        elif key == Qt.Key.Key_K:
             self._move_up()
             return True
-        elif key == Qt.Key_G:
-            if modifiers & Qt.ShiftModifier:  # G
+        elif key == Qt.Key.Key_G:
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:  # G
                 self._go_to_last()
             else:  # gg (handled in sequence)
                 if hasattr(self, '_pending_g') and time.time() - self._pending_g < 0.5:
@@ -359,26 +370,26 @@ class VimList(QWidget):
                 else:
                     self._pending_g = time.time()
             return True
-        elif key == Qt.Key_I:
+        elif key == Qt.Key.Key_I:
             self._enter_edit_mode()
             return True
-        elif key == Qt.Key_V:
+        elif key == Qt.Key.Key_V:
             self._enter_visual_mode()
             return True
-        elif key == Qt.Key_O:
-            if modifiers & Qt.ShiftModifier:  # O
+        elif key == Qt.Key.Key_O:
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:  # O
                 self._add_item_above()
             else:  # o
                 self._add_item_below()
             return True
-        elif key == Qt.Key_D:
+        elif key == Qt.Key.Key_D:
             self.pending_delete = True
             self.delete_start_time = time.time()
             return True
-        elif key == Qt.Key_X:
+        elif key == Qt.Key.Key_X:
             self._delete_current_item()
             return True
-        elif key == Qt.Key_Y:
+        elif key == Qt.Key.Key_Y:
             if self.pending_copy:
                 self._copy_current_item()
                 return True
@@ -386,22 +397,22 @@ class VimList(QWidget):
                 self.pending_copy = True
                 self.copy_start_time = time.time()
                 return True
-        elif key == Qt.Key_P:
-            if modifiers & Qt.ShiftModifier:  # P
+        elif key == Qt.Key.Key_P:
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:  # P
                 self._paste_above()
             else:  # p
                 self._paste_below()
             return True
-        elif key == Qt.Key_Slash:
+        elif key == Qt.Key.Key_Slash:
             self._enter_search_mode()
             return True
-        elif key == Qt.Key_N:
-            if modifiers & Qt.ShiftModifier:  # N
+        elif key == Qt.Key.Key_N:
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:  # N
                 self._search_previous()
             else:  # n
                 self._search_next()
             return True
-        elif key == Qt.Key_R:
+        elif key == Qt.Key.Key_R:
             self._refresh_list()
             return True
         
@@ -411,13 +422,13 @@ class VimList(QWidget):
         """Handle key events in search mode."""
         key = event.key()
         
-        if key == Qt.Key_Escape:
+        if key == Qt.Key.Key_Escape:
             self._exit_search_mode()
             return True
-        elif key == Qt.Key_Return:
+        elif key == Qt.Key.Key_Return:
             self._execute_search()
             return True
-        elif key == Qt.Key_Backspace:
+        elif key == Qt.Key.Key_Backspace:
             if self.search_text:
                 self.search_text = self.search_text[:-1]
                 self._update_search_display()
@@ -437,17 +448,17 @@ class VimList(QWidget):
         """Handle key events in visual mode."""
         key = event.key()
         
-        if key == Qt.Key_J:
+        if key == Qt.Key.Key_J:
             self._visual_move_down()
             return True
-        elif key == Qt.Key_K:
+        elif key == Qt.Key.Key_K:
             self._visual_move_up()
             return True
-        elif key == Qt.Key_Y:
+        elif key == Qt.Key.Key_Y:
             self._copy_visual_selection()
             self._exit_visual_mode()
             return True
-        elif key == Qt.Key_D or key == Qt.Key_X:
+        elif key == Qt.Key.Key_D or key == Qt.Key.Key_X:
             self._delete_visual_selection()
             self._exit_visual_mode()
             return True
@@ -488,17 +499,11 @@ class VimList(QWidget):
             if current_item:
                 self._original_value = current_item.text()
                 
-                # Use a custom dialog for editing instead of in-place editing
-                dialog = VimListInputDialog("Edit item", self._original_value, self)
-                if dialog.exec() == QDialog.DialogCode.Accepted:
-                    new_value = dialog.get_value().strip()
-                    if new_value != self._original_value:
-                        self.items[current_row] = new_value
-                        current_item.setText(new_value)
-                        self.item_edited.emit(current_row, self._original_value, new_value)
+                # Enable editing for this specific item
+                current_item.setFlags(current_item.flags() | Qt.ItemFlag.ItemIsEditable)
                 
-                self.edit_mode = False
-                self._original_value = ""
+                # Start editing the item directly
+                self.list_widget.editItem(current_item)
     
     def _exit_edit_mode(self, save: bool = True):
         """Exit edit mode."""
@@ -508,22 +513,42 @@ class VimList(QWidget):
         current_row = self.list_widget.currentRow()
         current_item = self.list_widget.item(current_row)
         
-        if save and current_item:
-            new_value = current_item.text()
-            old_value = getattr(self, '_original_value', "")
-            
-            if current_row < len(self.items):
-                self.items[current_row] = new_value
+        if current_item:
+            if save:
+                # Get the final edited value
+                new_value = getattr(self, '_current_edit_value', current_item.text())
+                old_value = getattr(self, '_original_value', "")
                 
-            if old_value != new_value:
-                self.item_edited.emit(current_row, old_value, new_value)
-        elif not save and current_item:
-            # Restore original value
-            original_value = getattr(self, '_original_value', "")
-            current_item.setText(original_value)
+                # Update internal data
+                if current_row < len(self.items):
+                    self.items[current_row] = new_value
+                    
+                # Emit signal if value changed
+                if old_value != new_value:
+                    self.item_edited.emit(current_row, old_value, new_value)
+            else:
+                # Restore original value
+                original_value = getattr(self, '_original_value', "")
+                # Temporarily disconnect signal to avoid loops
+                self.list_widget.itemChanged.disconnect(self._on_item_changed)
+                current_item.setText(original_value)
+                self.list_widget.itemChanged.connect(self._on_item_changed)
+                
+                if current_row < len(self.items):
+                    self.items[current_row] = original_value
+            
+            # Disable editing for this item
+            current_item.setFlags(current_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         
+        # Clean up edit mode state
         self.edit_mode = False
-        self._original_value = ""
+        if hasattr(self, '_original_value'):
+            delattr(self, '_original_value')
+        if hasattr(self, '_current_edit_value'):
+            delattr(self, '_current_edit_value')
+        
+        # Ensure focus returns to the list widget
+        self.list_widget.setFocus()
     
     # Add/Delete methods
     def _add_item_below(self):
