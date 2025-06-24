@@ -2,13 +2,7 @@
 """Folder Image Gallery example."""
 
 import sys
-import os
 from pathlib import Path
-
-# Add the src directory to the path
-current_dir = Path(__file__).parent
-src_dir = current_dir.parent / "src"
-sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication
 from gui_pyqt_widgets import FolderImageGallery
@@ -19,6 +13,7 @@ def main():
     app = QApplication(sys.argv)
     
     # Use sample_folders directory
+    current_dir = Path(__file__).parent
     sample_folders_dir = current_dir / "sample_folders"
     
     if not sample_folders_dir.exists():

@@ -2,10 +2,6 @@
 """Main entry point for GUI PyQt Widgets demonstration."""
 
 import sys
-from pathlib import Path
-
-# Add src to Python path for development
-sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
 from PySide6.QtCore import Qt
@@ -29,7 +25,7 @@ class DemoWindow(QMainWindow):
         
         # Add title label
         title_label = QLabel("VimTable Demo - Try vim-style navigation!")
-        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px;")
         layout.addWidget(title_label)
         
@@ -40,7 +36,7 @@ class DemoWindow(QMainWindow):
             "Row ops: o (new below), O (new above), dd (delete) | "
             "Copy/Paste: yy (copy), p (paste)"
         )
-        instruction_label.setAlignment(Qt.AlignCenter)
+        instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         instruction_label.setStyleSheet("font-size: 12px; color: gray; margin-bottom: 10px;")
         layout.addWidget(instruction_label)
         
@@ -50,9 +46,9 @@ class DemoWindow(QMainWindow):
         
         # Disable input method for the VimTable and its internal QTableWidget
         # This prevents Windows IME from activating when the table gets focus
-        self.vim_table.setAttribute(Qt.WA_InputMethodEnabled, False)
+        self.vim_table.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, False)
         if hasattr(self.vim_table, 'table'):
-            self.vim_table.table.setAttribute(Qt.WA_InputMethodEnabled, False)
+            self.vim_table.table.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, False)
         
         # Set sample data (without headers since they're already set)
         sample_data = [

@@ -2,13 +2,7 @@
 """Image Thumbnail example."""
 
 import sys
-import os
 from pathlib import Path
-
-# Add the src directory to the path
-current_dir = Path(__file__).parent
-src_dir = current_dir.parent / "src"
-sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
 from gui_pyqt_widgets import ImageThumbnail
@@ -28,6 +22,7 @@ class ThumbnailExample(QMainWindow):
         layout = QVBoxLayout(central_widget)
         
         # Find first image
+        current_dir = Path(__file__).parent
         sample_dir = current_dir / "sample_images"
         if not sample_dir.exists():
             sample_dir = current_dir / "sample"

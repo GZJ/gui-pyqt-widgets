@@ -2,8 +2,6 @@
 """Example demonstrating VimTree usage."""
 
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
 from PySide6.QtCore import QTimer

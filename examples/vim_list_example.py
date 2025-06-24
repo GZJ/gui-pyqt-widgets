@@ -24,14 +24,9 @@ VimList Key Bindings:
 """
 
 import sys
-import os
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QTextEdit
 from PySide6.QtCore import Qt
-
-# Add the src directory to Python path
-src_path = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_path))
 
 from gui_pyqt_widgets.vim_list import VimList
 

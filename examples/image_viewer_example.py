@@ -2,13 +2,7 @@
 """Image Viewer example."""
 
 import sys
-import os
 from pathlib import Path
-
-# Add the src directory to the path
-current_dir = Path(__file__).parent
-src_dir = current_dir.parent / "src"
-sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication
 from gui_pyqt_widgets import ImageViewer
@@ -19,6 +13,7 @@ def main():
     app = QApplication(sys.argv)
     
     # Get image files from sample directory
+    current_dir = Path(__file__).parent
     sample_dir = current_dir / "sample_images"
     if not sample_dir.exists():
         sample_dir = current_dir / "sample"
