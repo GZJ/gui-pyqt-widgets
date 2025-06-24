@@ -150,7 +150,7 @@ class VimList(QWidget):
         self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_widget.setAlternatingRowColors(self.zebra_stripes)
         
-        # Disable default editing
+        # Enable editing for specific items when needed
         self.list_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         
         self.list_widget.installEventFilter(self)
@@ -482,12 +482,23 @@ class VimList(QWidget):
         """Enter edit mode for the current item."""
         current_row = self.list_widget.currentRow()
         
-        if current_row >= 0:
+        if current_row >= 0 and current_row < len(self.items):
             self.edit_mode = True
             current_item = self.list_widget.item(current_row)
             if current_item:
                 self._original_value = current_item.text()
-                self.list_widget.editItem(current_item)
+                
+                # Use a custom dialog for editing instead of in-place editing
+                dialog = VimListInputDialog("Edit item", self._original_value, self)
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    new_value = dialog.get_value().strip()
+                    if new_value != self._original_value:
+                        self.items[current_row] = new_value
+                        current_item.setText(new_value)
+                        self.item_edited.emit(current_row, self._original_value, new_value)
+                
+                self.edit_mode = False
+                self._original_value = ""
     
     def _exit_edit_mode(self, save: bool = True):
         """Exit edit mode."""
@@ -521,7 +532,7 @@ class VimList(QWidget):
         insert_pos = current_row + 1 if current_row >= 0 else len(self.items)
         
         dialog = VimListInputDialog("Add new item", "", self)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             new_item = dialog.get_value().strip()
             if new_item:
                 self.items.insert(insert_pos, new_item)
@@ -538,7 +549,7 @@ class VimList(QWidget):
         insert_pos = current_row if current_row >= 0 else 0
         
         dialog = VimListInputDialog("Add new item", "", self)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             new_item = dialog.get_value().strip()
             if new_item:
                 self.items.insert(insert_pos, new_item)
@@ -745,11 +756,15 @@ class VimList(QWidget):
     def _update_search_display(self):
         """Update search display (could show search text in status bar)."""
         # For now, just update the window title to show search
-        if hasattr(self.parent(), 'setWindowTitle'):
-            if self.search_mode:
-                self.parent().setWindowTitle(f"Search: {self.search_text}")
-            else:
-                self.parent().setWindowTitle("VimList")
+        parent = self.parent()
+        if parent and hasattr(parent, 'setWindowTitle'):
+            try:
+                if self.search_mode:
+                    parent.setWindowTitle(f"Search: {self.search_text}")  # type: ignore
+                else:
+                    parent.setWindowTitle("VimList")  # type: ignore
+            except AttributeError:
+                pass
     
     def _execute_search(self):
         """Execute the current search."""
