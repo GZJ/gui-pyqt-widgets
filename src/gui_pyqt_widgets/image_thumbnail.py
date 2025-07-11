@@ -240,3 +240,7 @@ class ImageThumbnail(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.double_clicked.emit(self.index)
         super().mouseDoubleClickEvent(event)
+
+    def get_pixmap(self) -> QPixmap:
+        """Get the QPixmap of the original image (not scaled thumbnail)."""
+        return QPixmap(self.image_path)
