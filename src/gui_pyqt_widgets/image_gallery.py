@@ -2,7 +2,7 @@
 
 import os
 import math
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict, Any
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QScrollArea, QGridLayout, QLabel, 
     QVBoxLayout, QLineEdit, QApplication
@@ -25,24 +25,29 @@ class ImageGallery(QMainWindow):
     - Full-screen image viewer integration
     - Responsive layout that adapts to window size
     - Customizable thumbnail size and spacing
+    - Configurable keyboard shortcuts
+    - Custom callback functions
     
     Signals:
         image_selected(str, int): Emitted when image is selected (path, index)
         selection_changed(List[int]): Emitted when selection changes (list of indices)
         search_text_changed(str): Emitted when search text changes
+        key_pressed(int): Emitted when a key is pressed (key code)
     
-    Key Bindings:
+    Default Key Bindings:
     - H/J/K/L: Navigate left/down/up/right
     - Enter: Open selected image in viewer
     - /: Focus search box
     - Escape: Clear search / Exit search mode
     - M: Toggle selection of current thumbnail
+    - Shift+M: Open folder gallery (if callback provided)
     - Q: Close gallery
     """
     
     image_selected = Signal(str, int)
     selection_changed = Signal(list)
     search_text_changed = Signal(str)
+    key_pressed = Signal(int)
     
     def __init__(
         self,
@@ -50,6 +55,8 @@ class ImageGallery(QMainWindow):
         additional_folders: Optional[List[str]] = None,
         thumbnail_size: int = 240,
         window_geometry: tuple = (100, 100, 900, 600),
+        key_bindings: Optional[Dict[str, Callable]] = None,
+        callbacks: Optional[Dict[str, Callable]] = None,
         parent: Optional[QWidget] = None
     ):
         """Initialize the ImageGallery.
@@ -59,6 +66,8 @@ class ImageGallery(QMainWindow):
             additional_folders: Additional folders to include
             thumbnail_size: Size of thumbnails in pixels
             window_geometry: (x, y, width, height) for initial window
+            key_bindings: Custom key bindings {key_name: callback}
+            callbacks: Custom callback functions for various actions
             parent: Parent widget
         """
         super().__init__(parent)
@@ -76,6 +85,10 @@ class ImageGallery(QMainWindow):
         self.current_cols = 0
         self.selected_indices: set = set()
         self.is_searching = False
+        
+        # Custom key bindings and callbacks
+        self.key_bindings = key_bindings or {}
+        self.callbacks = callbacks or {}
         
         # Set up window
         x, y, w, h = window_geometry
@@ -368,12 +381,25 @@ class ImageGallery(QMainWindow):
         QTimer.singleShot(100, self._update_layout)  # Delay to avoid too frequent updates
     
     def keyPressEvent(self, event: QKeyEvent):
-        """Handle key press events."""
+        """Handle key press events with support for custom key bindings."""
         if not self.visible_thumbnails:
             super().keyPressEvent(event)
             return
         
         key = event.key()
+        modifiers = event.modifiers()
+        
+        # Emit key pressed signal
+        self.key_pressed.emit(key)
+        
+        # Check custom key bindings first
+        key_name = self._get_key_name(key, modifiers)
+        if key_name in self.key_bindings:
+            callback = self.key_bindings[key_name]
+            if callable(callback):
+                callback(self, event)
+                event.accept()
+                return
         
         # Search functionality
         if key == Qt.Key.Key_Slash and not self.search_input.hasFocus():
@@ -397,6 +423,15 @@ class ImageGallery(QMainWindow):
         if self.search_input.hasFocus():
             super().keyPressEvent(event)
             return
+        
+        # Handle Shift+M for folder gallery (from mrm)
+        if key == Qt.Key.Key_M and modifiers == Qt.KeyboardModifier.ShiftModifier:
+            if 'open_folder_gallery' in self.callbacks:
+                callback = self.callbacks['open_folder_gallery']
+                if callable(callback):
+                    callback(self.additional_folders, self)
+                    event.accept()
+                    return
         
         # Navigation
         old_focus = self.current_focus
@@ -432,3 +467,68 @@ class ImageGallery(QMainWindow):
             self._ensure_thumbnail_visible(current_thumbnail)
         
         super().keyPressEvent(event)
+    
+    def _get_key_name(self, key: int, modifiers: Qt.KeyboardModifier) -> str:
+        """Convert key and modifiers to a string name for key bindings."""
+        key_names = {
+            int(Qt.Key.Key_H): 'H',
+            int(Qt.Key.Key_J): 'J', 
+            int(Qt.Key.Key_K): 'K',
+            int(Qt.Key.Key_L): 'L',
+            int(Qt.Key.Key_Return): 'Enter',
+            int(Qt.Key.Key_M): 'M',
+            int(Qt.Key.Key_Q): 'Q',
+            int(Qt.Key.Key_Slash): 'Slash',
+            int(Qt.Key.Key_Escape): 'Escape'
+        }
+        
+        key_name = key_names.get(key, f'Key_{key}')
+        
+        if modifiers == Qt.KeyboardModifier.ShiftModifier:
+            key_name = f'Shift+{key_name}'
+        elif modifiers == Qt.KeyboardModifier.ControlModifier:
+            key_name = f'Ctrl+{key_name}'
+        elif modifiers == Qt.KeyboardModifier.AltModifier:
+            key_name = f'Alt+{key_name}'
+        
+        return key_name
+    
+    def set_key_binding(self, key_name: str, callback: Callable):
+        """Set a custom key binding.
+        
+        Args:
+            key_name: Key name (e.g., 'H', 'Shift+M', 'Ctrl+Q')
+            callback: Function to call when key is pressed
+        """
+        self.key_bindings[key_name] = callback
+    
+    def set_callback(self, action_name: str, callback: Callable):
+        """Set a custom callback function.
+        
+        Args:
+            action_name: Action name (e.g., 'open_folder_gallery', 'show_image_viewer')
+            callback: Function to call for the action
+        """
+        self.callbacks[action_name] = callback
+    
+    def get_current_image_path(self) -> Optional[str]:
+        """Get the path of the currently focused image.
+        
+        Returns:
+            Path to current image or None if no images
+        """
+        if self.visible_thumbnails and 0 <= self.current_focus < len(self.visible_thumbnails):
+            thumbnail = self.visible_thumbnails[self.current_focus]
+            return thumbnail.get_image_path()
+        return None
+    
+    def get_current_image_index(self) -> Optional[int]:
+        """Get the index of the currently focused image.
+        
+        Returns:
+            Index of current image or None if no images
+        """
+        if self.visible_thumbnails and 0 <= self.current_focus < len(self.visible_thumbnails):
+            thumbnail = self.visible_thumbnails[self.current_focus]
+            return thumbnail.get_index()
+        return None

@@ -2,8 +2,8 @@
 
 import os
 import math
-from typing import List, Optional
-from PySide6.QtWidgets import QLabel, QApplication
+from typing import List, Optional, Callable, Dict
+from PySide6.QtWidgets import QLabel, QApplication, QMessageBox
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeyEvent
 
@@ -24,14 +24,18 @@ class FolderImageGallery(ImageGallery):
     - Falls back to default folder icon
     - Opens folder content in new gallery on click
     - Inherits all ImageGallery navigation and search features
+    - Supports file moving functionality (from mrm)
+    - Configurable callbacks for custom actions
     
     Signals:
         folder_selected(str): Emitted when folder is selected (folder path)
         folder_opened(str): Emitted when folder is opened (folder path)
+        files_moved(List[str], str): Emitted when files are moved (file paths, target folder)
     """
     
     folder_selected = Signal(str)
     folder_opened = Signal(str)
+    files_moved = Signal(list, str)
     
     def __init__(
         self,
@@ -39,6 +43,7 @@ class FolderImageGallery(ImageGallery):
         parent_gallery: Optional['ImageGallery'] = None,
         thumbnail_size: int = 240,
         window_geometry: tuple = (150, 150, 800, 500),
+        callbacks: Optional[Dict[str, Callable]] = None,
         parent=None
     ):
         """Initialize the FolderImageGallery.
@@ -48,6 +53,7 @@ class FolderImageGallery(ImageGallery):
             parent_gallery: Reference to parent gallery (for navigation back)
             thumbnail_size: Size of thumbnails in pixels
             window_geometry: (x, y, width, height) for initial window
+            callbacks: Custom callback functions for various actions
             parent: Parent widget
         """
         self.folder_paths = folder_paths
@@ -57,10 +63,19 @@ class FolderImageGallery(ImageGallery):
         import tempfile
         temp_dir = tempfile.mkdtemp()
         
+        # Merge callbacks with default ones
+        default_callbacks = {
+            'move_files': self._default_move_files,
+            'refresh_parent': self._default_refresh_parent
+        }
+        if callbacks:
+            default_callbacks.update(callbacks)
+        
         super().__init__(
             image_folder=temp_dir,  # Use temp directory instead of empty string
             thumbnail_size=thumbnail_size,
             window_geometry=window_geometry,
+            callbacks=default_callbacks,
             parent=parent
         )
         
@@ -301,16 +316,16 @@ class FolderImageGallery(ImageGallery):
         """Handle key press events with folder-specific behavior."""
         key = event.key()
         
-        # Handle Enter key to open folder with image viewer
+        # Handle Enter key to move files (from mrm)
         if (key == Qt.Key.Key_Return and 
             not self.search_input.hasFocus() and 
             self.visible_thumbnails):
             
-            thumbnail = self.visible_thumbnails[self.current_focus]
-            folder_path = thumbnail.property("folder_path") or ''
-            if folder_path:
-                self._open_folder_with_viewer(folder_path)
-                return
+            if 'move_files' in self.callbacks:
+                callback = self.callbacks['move_files']
+                if callable(callback):
+                    callback(self, event)
+                    return
         
         # Handle Escape to go back to parent gallery
         if key == Qt.Key.Key_Escape and not self.search_input.hasFocus():
@@ -322,6 +337,68 @@ class FolderImageGallery(ImageGallery):
         
         # Use parent class for other key handling
         super().keyPressEvent(event)
+    
+    def _default_move_files(self, gallery, event):
+        """Default implementation for moving files (from mrm)."""
+        if not self.visible_thumbnails or self.current_focus >= len(self.folder_paths):
+            return
+        
+        # Get selected files from parent gallery
+        selected_files = []
+        if self.parent_gallery:
+            selected_files = self.parent_gallery.get_selected_image_paths()
+        
+        if not selected_files:
+            return
+        
+        # Get target folder
+        target_folder = self.folder_paths[self.current_focus]
+        
+        # Move files
+        moved_successfully = True
+        for src_path in selected_files:
+            filename = os.path.basename(src_path)
+            dst_path = os.path.join(target_folder, filename)
+            try:
+                os.rename(src_path, dst_path)
+            except OSError as e:
+                QMessageBox.warning(self, "Error", f"Failed to move file: {e}")
+                moved_successfully = False
+                break
+        
+        if moved_successfully:
+            # Emit signal
+            self.files_moved.emit(selected_files, target_folder)
+            
+            # Refresh parent gallery
+            if 'refresh_parent' in self.callbacks:
+                callback = self.callbacks['refresh_parent']
+                if callable(callback):
+                    callback(self.parent_gallery)
+            
+            # Close this window
+            self.close()
+    
+    def _default_refresh_parent(self, parent_gallery):
+        """Default implementation for refreshing parent gallery."""
+        if parent_gallery:
+            parent_gallery.refresh_images()
+    
+    def set_move_files_callback(self, callback: Callable):
+        """Set custom callback for moving files.
+        
+        Args:
+            callback: Function to handle file moving (gallery, event) -> None
+        """
+        self.callbacks['move_files'] = callback
+    
+    def set_refresh_parent_callback(self, callback: Callable):
+        """Set custom callback for refreshing parent gallery.
+        
+        Args:
+            callback: Function to refresh parent gallery (parent_gallery) -> None
+        """
+        self.callbacks['refresh_parent'] = callback
     
     def get_folder_paths(self) -> List[str]:
         """Get the list of folder paths.
